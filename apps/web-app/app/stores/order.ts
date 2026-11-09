@@ -1,76 +1,154 @@
-import type { Order, OrderItem, OrderItemChange } from '@nextorders/food-schema'
+import type { ApiError, Order as ApiOrder, Cart, OrderCreated, Quote } from '@delivery/api-client'
+import type { Order, OrderItemChange } from '@nextorders/food-schema'
 
 const NON_DIGIT_RE = /\D/g
+const CONTACTS_KEY = 'checkout-contacts'
+const ORDERS_KEY = 'order-tokens'
 
+type Fulfillment = 'delivery' | 'pickup'
+type PaymentMethodId = 'cash' | 'card_on_delivery' | 'online'
+
+interface SavedContacts {
+  name?: string
+  phone?: string
+  address?: Order['address']
+  note?: string
+}
+
+function readLocal<T>(key: string): T | undefined {
+  if (!import.meta.client) {
+    return
+  }
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) as T : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Private mode or quota: the data is a convenience only.
+  }
+}
+
+function newIdempotencyKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/**
+ * Cart and checkout. The cart lives on the server (ADR-0004); prices, delivery fee and all checks come
+ * from the API. Contact details stay on the device until the order is placed (152-FZ: no personal
+ * data on the server before consent).
+ */
 export const useOrderStore = defineStore('order', () => {
-  const id = ref<Order['id']>()
-  const name = ref<Order['name']>()
-  const phone = ref<Order['phone']>()
+  const cartToken = useCartToken()
+  const telegram = useTelegram()
+  const channelStore = useChannelStore()
+  const optionsStore = useOptionsStore()
+
+  const cart = ref<Cart | null>(null)
+  const quote = ref<Quote | null>(null)
+  const lastError = ref<ApiError | null>(null)
+
+  // Food-schema shaped fields consumed by the existing components.
+  const id = computed(() => cart.value?.id)
   const status = ref<Order['status']>()
-  const totalPrice = ref<Order['totalPrice']>(0)
+  const items = computed<CartLineView[]>(() => cart.value ? cartLinesView(cart.value) : [])
+  const totalPrice = computed(() => minorToDisplay(cart.value?.subtotal_minor ?? 0))
+  const deliveryFee = computed(() => minorToDisplay(quote.value?.delivery_fee_minor ?? 0))
+  const grandTotal = computed(() => minorToDisplay(quote.value?.total_minor ?? cart.value?.subtotal_minor ?? 0))
+
+  const name = ref<string>()
+  const phone = ref<string>()
   const deliveryMethod = ref<Order['deliveryMethod']>()
-  const paymentMethodId = ref<Order['paymentMethodId']>()
-  const changeFrom = ref<Order['changeFrom']>()
-  const readyBy = ref<Order['readyBy']>()
+  const paymentMethodId = ref<string>()
+  const changeFrom = ref<number>() // rubles typed by the buyer
+  const readyBy = ref<string>()
   const readyType = ref<Order['readyType']>()
   const address = ref<Order['address']>()
-  const note = ref<Order['note']>()
-  const items = ref<OrderItem[]>([])
+  const note = ref<string>()
+  const personalDataConsent = ref(false)
 
   const updatedAt = ref<number>()
-
-  const optionsStore = useOptionsStore()
-  const channelStore = useChannelStore()
-
   const isValidPhone = ref(false)
   const deliveryZoneRequired = ref(false)
   const deliveryZoneValid = ref(false)
-
-  const isEmpty = computed<boolean>(() => items.value.length === 0)
-  const isValidMinAmount = computed<boolean>(() => deliveryMethod.value === 'deliveryByCourier' && channelStore.deliveryByCourier?.minAmountForDelivery ? channelStore.deliveryByCourier.minAmountForDelivery <= totalPrice.value : true)
-  const isValidTotalPrice = computed<boolean>(() => isValidMinAmount.value)
-  const isValidDeliveryAddress = computed<boolean>(() => deliveryMethod.value === 'deliveryByCourier' ? address.value?.type === 'deliveryAddress' && !!address.value?.street : true)
-  const isValidPickupAddress = computed<boolean>(() => deliveryMethod.value === 'selfPickup' ? address.value?.type === 'warehouseAddress' && !!address.value?.id : true)
-  const isValidDeliveryZone = computed<boolean>(() => deliveryMethod.value === 'deliveryByCourier' && deliveryZoneRequired.value ? deliveryZoneValid.value : true)
-  const isValidAddress = computed<boolean>(() => isValidDeliveryAddress.value && isValidPickupAddress.value && isValidDeliveryZone.value)
-  const isValidCheckoutData = computed<boolean>(() => {
-    return !!name.value
-      && !!phone.value
-      && isValidPhone.value
-      && isValidAddress.value
-      && !!paymentMethodId.value
-  })
-
-  const isReadyToCheckout = computed<boolean>(() => isValidCheckoutData.value && isValidTotalPrice.value)
-
   const isLoading = ref<boolean>(true)
   const isSaved = ref<boolean>(true)
 
-  // Check if order is not saved
+  let idempotencyKey: string | null = null
+
+  const fulfillment = computed<Fulfillment | undefined>(() =>
+    deliveryMethod.value === 'deliveryByCourier' ? 'delivery' : deliveryMethod.value === 'selfPickup' ? 'pickup' : undefined)
+
+  const problems = computed(() => quote.value?.problems.filter((p) =>
+    // Not chosen yet is not an error to show.
+    !(p.code === 'payment_method_unavailable' && !paymentMethodId.value)) ?? [])
+  const hasProblem = (code: string) => problems.value.some((p) => p.code === code)
+
+  const isEmpty = computed<boolean>(() => items.value.length === 0)
+  const isValidTotalPrice = computed<boolean>(() => !hasProblem('below_min_order'))
+  const isValidDeliveryAddress = computed<boolean>(() => fulfillment.value === 'delivery'
+    ? address.value?.type === 'deliveryAddress' && !!address.value.street && address.value.lat != null
+    : true)
+  const isValidPickupAddress = computed<boolean>(() => fulfillment.value === 'pickup'
+    ? address.value?.type === 'warehouseAddress' && !!address.value.id
+    : true)
+  const isValidAddress = computed<boolean>(() => isValidDeliveryAddress.value && isValidPickupAddress.value
+    && (fulfillment.value !== 'delivery' || deliveryZoneValid.value))
+  const isValidCheckoutData = computed<boolean>(() => !!name.value
+    && !!phone.value
+    && isValidPhone.value
+    && !!fulfillment.value
+    && isValidAddress.value
+    && !!paymentMethodId.value
+    && personalDataConsent.value)
+  const isReadyToCheckout = computed<boolean>(() => isValidCheckoutData.value
+    && isValidTotalPrice.value
+    && !cart.value?.has_problems
+    && problems.value.length === 0)
+
+  // ---- persistence on the device -------------------------------------------------------------
+
+  function restoreContacts() {
+    applyDefaults()
+    const saved = readLocal<SavedContacts>(CONTACTS_KEY)
+    if (!saved) {
+      name.value ||= telegram.firstName() // display-only prefill from Telegram
+      return
+    }
+    name.value = saved.name
+    address.value = saved.address
+    note.value = saved.note
+    if (saved.phone) {
+      validateAndSetPhone(formatPhone(saved.phone))
+    }
+  }
+
+  function saveContacts() {
+    writeLocal(CONTACTS_KEY, { name: name.value, phone: phone.value, address: address.value } satisfies SavedContacts)
+  }
+
+  // Components set isSaved=false after edits: refresh the quote (debounced) instead of a server draft.
   watch(isSaved, useDebounceFn(async () => {
     if (!isSaved.value) {
-      await change({
-        name: name.value,
-        phone: phone.value,
-        address: address.value,
-        paymentMethodId: paymentMethodId.value,
-        changeFrom: changeFrom.value,
-        readyBy: readyBy.value,
-        readyType: readyType.value,
-        note: note.value,
-      }, false)
-
+      saveContacts()
+      await refreshQuote()
       isSaved.value = true
     }
-  }, 2000))
+  }, 400))
+
+  // ---- phone ---------------------------------------------------------------------------------
 
   function formatPhone(phoneAsString: string): string {
     if (!phoneAsString) {
       return ''
     }
-
     getPhoneNumberFormatter(optionsStore.countryCode).input(phoneAsString)
-
     return formatPhoneNumber(phoneAsString, optionsStore.countryCode)
   }
 
@@ -79,49 +157,32 @@ export const useOrderStore = defineStore('order', () => {
       isValidPhone.value = false
       return
     }
-
     getPhoneNumberFormatter(optionsStore.countryCode).input(formattedPhone)
     isValidPhone.value = checkPhoneNumberValidity(formattedPhone, optionsStore.countryCode)
+    phone.value = isValidPhone.value ? formattedPhone.replace(NON_DIGIT_RE, '') : undefined
+  }
 
-    if (isValidPhone.value) {
-      // Remove all except numbers
-      phone.value = formattedPhone.replace(NON_DIGIT_RE, '')
-    } else {
-      phone.value = undefined
-    }
+  // ---- API -----------------------------------------------------------------------------------
+
+  const api = () => useNuxtApp().$api
+
+  function branchForMenu(): string | undefined {
+    return fulfillment.value === 'pickup' && address.value?.type === 'warehouseAddress'
+      ? address.value.id || undefined
+      : quote.value?.branch_id ?? undefined
   }
 
   async function update() {
+    if (!cartToken.value) {
+      clear()
+      return
+    }
     try {
-      const data = await $fetch('/api/order')
-      if (!data?.id) {
-        return clear()
-      }
-
-      id.value = data.id
-      name.value = data.name
-      status.value = data.status
-      totalPrice.value = data.totalPrice
-      deliveryMethod.value = data.deliveryMethod
-      paymentMethodId.value = data.paymentMethodId
-      changeFrom.value = data.changeFrom
-      readyBy.value = data.readyBy
-      readyType.value = data.readyType
-      address.value = data.address
-      note.value = data.note
-      items.value = data.items
-
-      validateAndSetPhone(data.phone)
-
+      cart.value = await api().get('/v1/cart', { query: { branch_id: branchForMenu() } })
       updatedAt.value = Date.now()
-    } catch (error) {
-      const statusCode = (error && typeof error === 'object' && 'statusCode' in error)
-        ? (error as { statusCode?: number }).statusCode
-        : undefined
-
-      if (statusCode === 404) {
-        // Order not found or was completed
-        clear()
+    } catch (e) {
+      if ((e as ApiError).status === 404) {
+        clear() // expired or already checked out
       }
     } finally {
       isLoading.value = false
@@ -129,94 +190,212 @@ export const useOrderStore = defineStore('order', () => {
   }
 
   function clear() {
-    id.value = undefined
-    totalPrice.value = 0
-    items.value = []
-
+    cart.value = null
+    quote.value = null
+    cartToken.value = null
     isLoading.value = false
   }
 
-  async function add(variantId: string) {
-    isLoading.value = true
-
-    try {
-      await $fetch(
-        '/api/order/add',
-        {
-          method: 'POST',
-          body: { orderId: id.value, variantId },
-        },
-      )
-
+  async function ensureCart(): Promise<void> {
+    if (cartToken.value && !cart.value) {
+      // After a reload the token is known before the cart is loaded: never replace a live cart.
       await update()
-    } catch {
-      // Request failed, keep current state
+    }
+    if (cartToken.value && cart.value) {
+      return
+    }
+    const created = await api().post('/v1/carts')
+    cartToken.value = created.cart_token
+    cart.value = created.cart
+  }
+
+  async function add(variantId: string, modifiers: { modifierId: string, quantity: number }[] = [], quantity = 1): Promise<boolean> {
+    isLoading.value = true
+    lastError.value = null
+    try {
+      await ensureCart()
+      const body = {
+        variant_id: variantId,
+        quantity,
+        modifiers: modifiers.map((m) => ({ modifier_id: m.modifierId, quantity: m.quantity })),
+      }
+      try {
+        cart.value = await api().post('/v1/cart/items', { body })
+      } catch (e) {
+        if ((e as ApiError).code !== 'cart_not_found') {
+          throw e
+        }
+        // The stored cart expired or was checked out elsewhere: start a new one once.
+        cart.value = null
+        cartToken.value = null
+        await ensureCart()
+        cart.value = await api().post('/v1/cart/items', { body })
+      }
+      await refreshQuote()
+      return true
+    } catch (e) {
+      lastError.value = e as ApiError
+      return false
     } finally {
       isLoading.value = false
     }
   }
 
-  async function change(order: Partial<Order>, isUpdateNeeded = true) {
+  async function changeItem(data: Pick<OrderItemChange, 'itemId' | 'method'>) {
+    const line = items.value.find((l) => l.id === data.itemId)
+    if (!line) {
+      return
+    }
+    const quantity = line.quantity + (data.method === 'increment' ? 1 : -1)
     try {
-      const data = await $fetch(
-        '/api/order',
-        {
-          method: 'PATCH',
-          body: order,
-        },
-      )
+      cart.value = await api().patch('/v1/cart/items/{item_id}', {
+        path: { item_id: data.itemId },
+        body: { quantity },
+      })
+      await refreshQuote()
+    } catch (e) {
+      lastError.value = e as ApiError
+    }
+  }
 
-      if (isUpdateNeeded) {
+  /** Local checkout fields; kept for component compatibility (no server draft any more). */
+  async function change(order: Partial<Order>) {
+    if (order.deliveryMethod !== undefined) {
+      deliveryMethod.value = order.deliveryMethod
+    }
+    if (order.paymentMethodId !== undefined) {
+      paymentMethodId.value = order.paymentMethodId || undefined
+    }
+    isSaved.value = false
+  }
+
+  function checkoutBody() {
+    const delivery = fulfillment.value === 'delivery'
+    const a = address.value
+    const method = (paymentMethodId.value || 'cash') as PaymentMethodId
+    return {
+      fulfillment: fulfillment.value ?? 'pickup',
+      branch_id: !delivery && a?.type === 'warehouseAddress' && a.id ? a.id : null,
+      address: delivery && a?.type === 'deliveryAddress' && a.lat != null && a.lon != null
+        ? {
+            street: a.street,
+            flat: a.flat || null,
+            entrance: a.entrance || null,
+            floor: a.floor || null,
+            intercom: a.intercom || null,
+            comment: a.addressNote || null,
+            lat: a.lat,
+            lon: a.lon,
+          }
+        : null,
+      payment_method: method,
+      // The one place where a typed amount becomes minor units: integer kopecks.
+      change_from_minor: method === 'cash' && changeFrom.value ? Math.round(changeFrom.value * 100) : null,
+      requested_at: readyType.value === 'scheduled' && readyBy.value ? readyBy.value : null,
+      comment: note.value || null,
+    }
+  }
+
+  async function refreshQuote() {
+    if (!cartToken.value || !fulfillment.value || isEmpty.value) {
+      quote.value = null
+      return
+    }
+    const body = checkoutBody()
+    if (body.fulfillment === 'delivery' && !body.address) {
+      quote.value = null
+      deliveryZoneValid.value = false
+      return
+    }
+    try {
+      quote.value = await api().post('/v1/checkout/quote', { body })
+      deliveryZoneValid.value = !quote.value.problems.some((p) => p.code === 'outside_delivery_zone')
+      deliveryZoneRequired.value = body.fulfillment === 'delivery'
+    } catch (e) {
+      lastError.value = e as ApiError
+    }
+  }
+
+  async function complete(): Promise<OrderCreated | undefined> {
+    lastError.value = null
+    idempotencyKey ??= newIdempotencyKey()
+    try {
+      const initData = telegram.initData()
+      const created = await api().post('/v1/orders', {
+        // Inside Telegram the signed initData links the order to the buyer (verified by the server).
+        headers: { 'Idempotency-Key': idempotencyKey, ...(initData ? { 'X-Telegram-Init-Data': initData } : {}) },
+        body: {
+          ...checkoutBody(),
+          customer: { name: name.value ?? '', phone: phone.value ?? '' },
+          personal_data_consent: true,
+          expected_total_minor: quote.value?.total_minor ?? null,
+        },
+      })
+      idempotencyKey = null
+      rememberOrder(created.order.id, created.order_token)
+      saveContacts()
+      clear()
+      note.value = undefined
+      return created
+    } catch (e) {
+      const error = e as ApiError
+      lastError.value = error
+      // Same key only for blind retries after a network failure; a refused request changes the body.
+      if (error.status !== 0) {
+        idempotencyKey = null
+      }
+      if (error.code === 'price_changed') {
+        quote.value = (error.problem.extra?.quote as Quote | undefined) ?? quote.value
         await update()
       }
-
-      return data
-    } catch {
-      // Request failed, keep current state
     }
   }
 
-  async function changeItem(data: Pick<OrderItemChange, 'itemId' | 'method'>) {
+  function rememberOrder(orderId: string, token: string) {
+    const tokens = readLocal<Record<string, string>>(ORDERS_KEY) ?? {}
+    tokens[orderId] = token
+    writeLocal(ORDERS_KEY, tokens)
+  }
+
+  function orderToken(orderId: string): string | undefined {
+    return readLocal<Record<string, string>>(ORDERS_KEY)?.[orderId]
+  }
+
+  async function get(orderId: string): Promise<ApiOrder | undefined> {
+    const token = orderToken(orderId)
+    if (!token) {
+      return
+    }
     try {
-      await $fetch(
-        '/api/order/item',
-        {
-          method: 'PATCH',
-          body: data,
-        },
-      )
-
-      await update()
+      return await api().get('/v1/orders/{order_token}', { path: { order_token: token } })
     } catch {
-      // Request failed, keep current state
+      return undefined
     }
   }
 
-  async function complete(order: Partial<Order>) {
+  async function cancel(orderId: string): Promise<ApiOrder | undefined> {
+    const token = orderToken(orderId)
+    if (!token) {
+      return
+    }
     try {
-      const data = await $fetch(
-        '/api/order/complete',
-        {
-          method: 'POST',
-          body: order,
-        },
-      )
-
-      await update()
-
-      return data
-    } catch {
-      // Request failed, keep current state
+      return await api().post('/v1/orders/{order_token}/cancel', { path: { order_token: token } })
+    } catch (e) {
+      lastError.value = e as ApiError
     }
   }
 
-  async function get(id: string) {
-    try {
-      return await $fetch(`/api/order/id/${id}`)
-    } catch {
-      // Order not found
+  /** Default fulfillment. Called on the client after hydration (SSR state would overwrite a watcher's value). */
+  function applyDefaults() {
+    if (!deliveryMethod.value && channelStore.isActive) {
+      deliveryMethod.value = channelStore.deliveryByCourier?.isAvailable ? 'deliveryByCourier' : 'selfPickup'
     }
   }
+
+  watch(() => channelStore.isActive, applyDefaults)
+
+  // In Telegram, ask before closing the Mini App with a filled cart.
+  watch(isEmpty, (empty) => telegram.setClosingConfirmation(!empty))
 
   return {
     id,
@@ -224,7 +403,10 @@ export const useOrderStore = defineStore('order', () => {
     phone,
     status,
     totalPrice,
+    deliveryFee,
+    grandTotal,
     deliveryMethod,
+    fulfillment,
     paymentMethodId,
     changeFrom,
     readyBy,
@@ -232,6 +414,10 @@ export const useOrderStore = defineStore('order', () => {
     address,
     note,
     items,
+    quote,
+    problems,
+    lastError,
+    personalDataConsent,
 
     updatedAt,
 
@@ -247,11 +433,14 @@ export const useOrderStore = defineStore('order', () => {
     deliveryZoneValid,
 
     update,
+    restoreContacts,
+    refreshQuote,
     add,
     change,
     changeItem,
     complete,
     get,
+    cancel,
     formatPhone,
     validateAndSetPhone,
   }

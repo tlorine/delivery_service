@@ -8,10 +8,16 @@ supportedArchitectures:
   os: [linux, darwin, win32]
 
 trustPolicy: no-downgrade
+# Audited exception, not a relaxation: docs/audit/01-d1-chokidar-4.0.3.md (D1).
+# Remove once no dependency resolves chokidar@4.0.3.
+trustPolicyExclude:
+  - chokidar@4.0.3
 
 packages:
   - apps/*
   - packages/*
+  # NextOrders city/channel picker: a marketplace pattern, not part of the product (audit §5).
+  - '!apps/web-app-selector'
 
 catalogs:
   dev:
@@ -46,6 +52,13 @@ catalogs:
     libphonenumber-js: ^1.12.40
     pinia: ^3.0.4
     zod: ^4.3.6
+  mobile:
+    '@capacitor/android': 8.5.3
+    '@capacitor/app': 8.1.2
+    '@capacitor/cli': 8.5.3
+    '@capacitor/core': 8.5.3
+    '@capacitor/ios': 8.5.3
+    '@capacitor/preferences': 8.0.1
   test:
     '@playwright/test': ^1.58.2
     '@vitest/browser-playwright': ^4.1.0

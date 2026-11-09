@@ -10,9 +10,11 @@
     "clean": "rm -rf dist",
     "clean:modules": "rm -rf .nuxt node_modules",
     "typecheck": "nuxt typecheck",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "generate:mobile": "NUXT_BUILD_TARGET=mobile nuxt generate"
   },
   "dependencies": {
+    "@delivery/api-client": "workspace:*",
     "@neoconfetti/vue": "catalog:integrations",
     "@nextorders/core": "workspace:*",
     "@nextorders/food-schema": "workspace:*",

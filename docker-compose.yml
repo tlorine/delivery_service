@@ -1,0 +1,54 @@
+# Local development: `docker compose up --build`, then
+#   docker compose run --rm migrate python -m app.cli seed-demo
+# API: http://localhost:8000/docs  (tenant "demo" is bound to the host "localhost")
+name: delivery
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  DATABASE_URL: postgresql+asyncpg://delivery_app:delivery_app@postgres:5432/delivery
+  MIGRATOR_DATABASE_URL: postgresql+asyncpg://delivery:delivery@postgres:5432/delivery
+  DB_APP_ROLE: delivery_app
+  PLATFORM_API_HOSTS: '["api.localhost"]'
+  CORS_ORIGINS: '["http://localhost:3000","http://localhost:3001"]'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: delivery
+      POSTGRES_PASSWORD: delivery
+      POSTGRES_DB: delivery
+      APP_DB_USER: delivery_app
+      APP_DB_PASSWORD: delivery_app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    ports: ['5432:5432']
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U delivery -d delivery]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: ./backend
+    command: [alembic, upgrade, head]
+    environment: *backend-env
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    build: ./backend
+    environment: *backend-env
+    ports: ['8000:8000']
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  worker:
+    build: ./backend
+    command: [python, -m, app.worker]
+    environment: *backend-env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+volumes:
+  pgdata:

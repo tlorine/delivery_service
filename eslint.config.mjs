@@ -26,6 +26,7 @@ export default antfu(
     },
   },
   {
-    ignores: ['.github/**'],
+    // Generated from backend/openapi.json; Python backend has its own linters.
+    ignores: ['.github/**', 'packages/api-client/src/schema.d.ts', 'backend/**', 'apps/mobile/android/**', 'apps/mobile/ios/**'],
   },
 )

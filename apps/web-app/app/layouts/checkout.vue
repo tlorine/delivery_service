@@ -1,15 +1,9 @@
 <template>
-  <header class="z-10 h-16 bg-default fixed top-0 left-0 right-0">
+  <header class="sticky top-0 z-40 border-b border-default bg-default/90 backdrop-blur">
     <CheckoutHeader />
   </header>
-
-  <main class="relative top-16 min-h-dvh">
-    <UContainer class="pb-10 pt-4 max-w-5xl">
-      <slot />
-    </UContainer>
-
-    <div class="pb-10 max-w-5xl mx-auto">
-      <Footer />
-    </div>
+  <main class="mx-auto w-full max-w-6xl px-4 pt-4 pb-10 md:px-6 lg:px-8">
+    <slot />
   </main>
+  <Footer />
 </template>

@@ -1,14 +1,19 @@
 <template>
-  <div class="z-10 w-full h-full px-4 sm:px-6 flex flex-row flex-nowrap gap-1.5 justify-between content-center items-center border-b border-default">
+  <div class="mx-auto flex h-[var(--header-h)] w-full max-w-6xl items-center gap-3 px-4 md:px-6 lg:px-8">
     <UButton
       to="/"
-      icon="i-lucide-undo-2"
-      variant="outline"
+      icon="lucide:chevron-left"
+      variant="ghost"
       color="neutral"
       size="lg"
-      :label="$dict('common.return')"
+      class="-ml-2"
+      :label="$dict('web-app.checkout.back-to-menu')"
     />
-
-    <UColorModeButton variant="outline" />
+    <span class="ml-auto truncate text-sm text-muted">{{ optionsStore.getLocaleValue(channelStore.title) }}</span>
   </div>
 </template>
+
+<script setup lang="ts">
+const optionsStore = useOptionsStore()
+const channelStore = useChannelStore()
+</script>

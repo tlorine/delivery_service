@@ -18,10 +18,13 @@ export default defineNuxtConfig({
   },
   i18n: {
     strategy: 'no_prefix',
-    defaultLocale: 'en',
+    // Russian market first (audit P11). A visitor's explicit choice is remembered in a cookie.
+    defaultLocale: 'ru',
     detectBrowserLanguage: {
       useCookie: true,
-      alwaysRedirect: true,
+      redirectOn: 'root',
+      alwaysRedirect: false,
+      fallbackLocale: 'ru',
     },
     locales: [
       { code: 'de', language: 'de-DE', name: 'Deutsch' },

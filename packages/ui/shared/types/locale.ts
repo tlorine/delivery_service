@@ -22,3 +22,8 @@ type StringifyValues<T> = {
 export type Dictionary = StringifyValues<typeof en>
 
 export type DictionaryKey = ExtractKeys<Dictionary>
+
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
+
+/** Upstream locales we do not maintain: missing keys fall back to `en` at runtime. */
+export type PartialDictionary = DeepPartial<Dictionary>

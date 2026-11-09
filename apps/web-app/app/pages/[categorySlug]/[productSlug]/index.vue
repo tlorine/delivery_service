@@ -1,152 +1,130 @@
 <template>
-  <CatalogBreadcrumb :items="breadcrumbs" />
+  <div class="pt-1">
+    <nav class="mb-3 flex items-center gap-1 text-sm text-muted" aria-label="breadcrumb">
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded-full py-1 pr-2 hover:text-toned"
+        :aria-label="$dict('common.return')"
+        @click="goBack()"
+      >
+        <UIcon name="lucide:chevron-left" class="size-5" />
+        <span class="hidden sm:inline">{{ $dict('common.return') }}</span>
+      </button>
+      <NuxtLink to="/" class="hidden md:inline hover:text-toned">
+        {{ $dict('common.home') }}
+      </NuxtLink>
+      <span class="hidden md:inline">/</span>
+      <NuxtLink :to="`/${category?.slug}`" class="hover:text-toned">
+        {{ optionsStore.getLocaleValue(category?.title) }}
+      </NuxtLink>
+    </nav>
 
-  <div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-0 gap-y-4 sm:gap-4">
-      <div class="col-span-1 relative w-full aspect-square">
-        <div class="relative w-full h-full">
+    <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10" :class="!hasImage && 'lg:!grid-cols-1 max-w-2xl'">
+      <div v-if="hasImage" class="-mx-4 md:mx-0 lg:sticky lg:top-[calc(var(--header-h)+1.25rem)] lg:self-start">
+        <div class="relative aspect-[4/3] max-h-[45vh] w-full overflow-hidden bg-elevated md:rounded-[24px] lg:max-h-none">
           <ProductImage
             :images="selectedVariant?.images ?? []"
             :lazy="false"
             size="md"
           />
-
-          <ProductVideo
-            v-if="selectedVariant?.video"
-            :video="selectedVariant.video"
-          />
-        </div>
-
-        <div v-if="product.badges?.length" class="absolute left-2.5 right-6 bottom-3.5">
-          <div class="flex flex-col gap-1.5">
-            <ProductBadge
-              v-for="badge in product.badges"
-              :key="badge.id"
-              :badge="badge"
-            />
-          </div>
         </div>
       </div>
 
-      <div class="col-span-2">
-        <h1 class="text-xl/6 md:text-2xl/7 font-semibold text-highlighted">
-          {{ optionsStore.getLocaleValue(product?.title) }}
+      <div class="mt-4 lg:mt-0 pb-6 lg:pb-0">
+        <h1 class="text-[26px]/8 md:text-[32px]/10 font-bold text-highlighted">
+          {{ optionsStore.getLocaleValue(product.title) }}
         </h1>
-        <div class="mt-1 font-normal text-muted flex flex-row gap-3">
-          <span>{{ weightValue }}{{ weightUnit }}</span>
-          <span>{{ optionsStore.getLocaleValue(selectedVariant?.title) }}</span>
+        <p v-if="weightValue" class="mt-1 text-muted">
+          {{ weightValue }} {{ weightUnit }}
+        </p>
+        <p v-if="product.description" class="mt-3 text-[15px]/6 text-toned">
+          {{ optionsStore.getLocaleValue(product.description) }}
+        </p>
+
+        <div
+          v-if="!withSingleVariant"
+          class="mt-5 flex flex-wrap gap-2"
+          role="radiogroup"
+          :aria-label="$dict('web-app.product.size')"
+        >
+          <button
+            v-for="v in product.variants"
+            :key="v.id"
+            type="button"
+            role="radio"
+            :aria-checked="v.id === selectedVariantId"
+            class="rounded-full px-4 py-2 text-[15px] font-medium ring-1 transition active:scale-98"
+            :class="v.id === selectedVariantId ? 'bg-inverted text-inverted ring-inverted' : 'bg-default text-toned ring-default hover:bg-elevated'"
+            @click="selectedVariantId = v.id"
+          >
+            {{ optionsStore.getLocaleValue(v.title) }}<span v-if="v.weightValue" class="opacity-70"> · {{ v.weightValue }} {{ getWeightLocalizedUnit(v.weightUnit) }}</span>
+          </button>
         </div>
 
-        <div v-if="!withSingleVariant" class="mt-4 mb-6">
-          <USelect
-            v-model="selectedVariantId"
-            :items="variantItems"
-            size="xl"
-            icon="lucide:bookmark-check"
-            class="min-w-56"
-          />
-        </div>
+        <ProductModifiers
+          v-if="modifierGroups.length"
+          v-model="selection"
+          :groups="modifierGroups"
+          :currency="optionsStore.currencyCode"
+          class="mt-6"
+        />
 
-        <div class="mt-4 min-h-12 flex flex-row gap-4 md:gap-6 items-center justify-between md:justify-start">
-          <div class="flex flex-col gap-0.5">
-            <ProductOriginalPrice
-              v-if="selectedVariant?.originalPrice"
-              :price="optionsStore.formatCurrency(selectedVariant.originalPrice)"
-              class="w-fit"
-            />
+        <ProductCompositionBlock
+          v-if="product.composition"
+          :composition="product.composition"
+          class="mt-6"
+        />
 
-            <div class="text-2xl/6 font-medium tracking-tight">
-              {{ optionsStore.formatCurrency(selectedVariant?.price ?? 0) }} <span class="text-xl">{{ optionsStore.currencySign }}</span>
+        <!-- One action bar: pinned to the bottom on phones/tablets, inline on desktop. -->
+        <div class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur lg:static lg:mt-8 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+          <p
+            v-if="!selectionComplete"
+            class="mb-2 text-center text-sm text-muted lg:text-left"
+            data-testid="selection-hint"
+          >
+            {{ $dict('web-app.product.choose-required') }}
+          </p>
+          <div class="mx-auto flex max-w-xl items-center gap-3 lg:mx-0">
+            <div class="flex h-14 shrink-0 items-center gap-1 rounded-[16px] bg-elevated px-1.5">
+              <button
+                type="button"
+                class="grid size-10 place-items-center rounded-[12px] hover:bg-accented disabled:opacity-40"
+                :disabled="quantity <= 1"
+                :aria-label="$dict('web-app.cart.decrease')"
+                @click="quantity--"
+              >
+                <UIcon name="lucide:minus" class="size-4" />
+              </button>
+              <span class="tabular w-6 text-center text-[17px] font-semibold" data-testid="product-quantity">{{ quantity }}</span>
+              <button
+                type="button"
+                class="grid size-10 place-items-center rounded-[12px] hover:bg-accented"
+                :aria-label="$dict('web-app.cart.increase')"
+                @click="quantity++"
+              >
+                <UIcon name="lucide:plus" class="size-4" />
+              </button>
             </div>
-          </div>
-
-          <template v-if="orderStore.isLoading">
-            <UIcon name="i-lucide-loader-circle" class="size-10 text-dimmed/25 motion-preset-spin" />
-          </template>
-          <template v-else>
-            <CartLineCounter v-if="line" :line="line" />
-            <UButton
-              v-else-if="selectedVariantId"
-              size="xl"
-              variant="solid"
-              color="secondary"
-              icon="lucide:shopping-basket"
-              :label="$dict('web-app.cart.add-to-cart')"
-              :ui="{
-                leadingIcon: 'hidden md:block',
-              }"
-              class="md:px-6 font-medium"
-              @click="orderStore.add(selectedVariantId)"
-            />
-          </template>
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-6 grid grid-cols-1 md:grid-cols-5 gap-y-8 md:gap-6">
-      <div v-if="product?.composition" class="col-span-full">
-        <ProductCompositionBlock :composition="product.composition" />
-      </div>
-
-      <div v-if="product?.description" class="col-span-3">
-        <h2 class="mb-1 font-medium text-muted">
-          {{ $dict('common.description') }}
-        </h2>
-        <div class="text-base/5">
-          {{ optionsStore.getLocaleValue(product?.description) }}
-        </div>
-      </div>
-
-      <div v-if="selectedVariant?.nutritionFacts" class="col-span-2">
-        <h2 class="mb-1 font-medium text-muted">
-          {{ $dict('common.nutrition.value-title') }}
-        </h2>
-        <div class="py-3.5 px-4.5 w-fit flex flex-row gap-4 lg:gap-5 bg-elevated/50 rounded-lg">
-          <div>
-            <div class="font-medium">
-              {{ selectedVariant.nutritionFacts.calories }}
-            </div>
-            <div class="mt-1 text-base/4 lowercase text-muted">
-              {{ $dict('common.nutrition.kcal') }}
-            </div>
-          </div>
-          <div>
-            <div class="flex flex-row gap-0.5 font-medium">
-              {{ selectedVariant.nutritionFacts.protein }}
-              <span>{{ $dict('common.abbreviation.g') }}</span>
-            </div>
-            <div class="mt-1 text-base/4 lowercase text-muted">
-              {{ $dict('common.nutrition.protein') }}
-            </div>
-          </div>
-          <div>
-            <div class="flex flex-row gap-0.5 font-medium">
-              {{ selectedVariant.nutritionFacts.fat }}
-              <span>{{ $dict('common.abbreviation.g') }}</span>
-            </div>
-            <div class="mt-1 text-base/4 lowercase text-muted">
-              {{ $dict('common.nutrition.fat') }}
-            </div>
-          </div>
-          <div>
-            <div class="flex flex-row gap-0.5 font-medium">
-              {{ selectedVariant.nutritionFacts.carbohydrate }}
-              <span>{{ $dict('common.abbreviation.g') }}</span>
-            </div>
-            <div class="mt-1 text-base/4 lowercase text-muted">
-              {{ $dict('common.nutrition.carbohydrate') }}
-            </div>
+            <button
+              type="button"
+              class="btn-accent flex h-14 flex-1 items-center justify-between rounded-[16px] px-5 text-[16px] font-semibold transition active:scale-[.99]"
+              :disabled="!selectionComplete || !product.isAvailableForPurchase || adding || !interactive"
+              data-testid="add-to-cart"
+              @click="addToCart()"
+            >
+              <span>{{ $dict('web-app.cart.add') }}</span>
+              <span class="tabular" data-testid="product-price">{{ optionsStore.formatCurrency(unitPrice * quantity) }} {{ optionsStore.currencySign }}</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
 
     <div v-if="product.recommendedProducts?.length" class="mt-12">
-      <h2 class="mb-2 font-medium text-muted">
+      <h2 class="mb-3 text-[22px] font-bold">
         {{ $dict('web-app.most-often-added') }}
       </h2>
-
-      <div class="grid grid-cols-2 md:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-4 md:gap-6">
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <ProductRecommendedCard
           v-for="p in product.recommendedProducts"
           :key="p.productVariantId"
@@ -160,6 +138,7 @@
 <script setup lang="ts">
 const { dict } = useDictionary()
 const { params } = useRoute()
+const router = useRouter()
 
 const orderStore = useOrderStore()
 const channelStore = useChannelStore()
@@ -176,27 +155,60 @@ if (!product) {
 
 useHead({
   title: `${optionsStore.getLocaleValue(product.title)} | ${optionsStore.getLocaleValue(channelStore.title)}`,
+  meta: [{ name: 'description', content: optionsStore.getLocaleValue(product.description) }],
 })
 
-const variantItems = computed(() => product.variants.map((variant) => ({ label: optionsStore.getLocaleValue(variant.title), value: variant.id })))
-
 const withSingleVariant = computed<boolean>(() => product.variants.length === 1)
-
 const selectedVariantId = ref(product.variants[0]?.id)
 const selectedVariant = computed(() => product.variants.find(({ id }) => id === selectedVariantId.value))
+const hasImage = computed(() => product.variants.some((v) => v.images.length))
 
 const weightValue = computed(() => selectedVariant.value?.weightValue)
 const weightUnit = computed(() => getWeightLocalizedUnit(selectedVariant.value?.weightUnit))
 
-const line = computed(() => orderStore.items.find((l) => l.variantId === selectedVariant.value?.id))
-
 const category = menuStore.getCategoryByProductId(product.id)
 
-const breadcrumbs = computed(() => [
-  { label: dict('common.home'), icon: 'lucide:house', to: '/' },
-  {
-    label: optionsStore.getLocaleValue(category?.title),
-    to: `/${category?.slug}`,
-  },
-])
+const modifierGroups = computed(() => menuStore.getModifierGroups(product.id))
+const selection = ref<Record<string, number>>({})
+const extraMinor = computed(() => selectionExtraMinor(modifierGroups.value, selection.value))
+const selectionComplete = computed(() => selectionIsComplete(modifierGroups.value, selection.value))
+const quantity = ref(1)
+// Display only: the server prices the line again (ADR-0004).
+const unitPrice = computed(() => (selectedVariant.value?.price ?? 0) + minorToDisplay(extraMinor.value))
+
+const toast = useToast()
+const { messageOf } = useApiErrorMessage()
+const { impact, notify } = useTelegram()
+const adding = ref(false)
+const interactive = ref(false)
+onMounted(() => {
+  interactive.value = true
+})
+
+function goBack() {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    navigateTo(`/${category?.slug ?? ''}`)
+  }
+}
+
+async function addToCart() {
+  if (!selectedVariantId.value) {
+    return
+  }
+  adding.value = true
+  const modifiers = Object.entries(selection.value).map(([modifierId, q]) => ({ modifierId, quantity: q }))
+  const ok = await orderStore.add(selectedVariantId.value, modifiers, quantity.value)
+  adding.value = false
+  if (ok) {
+    impact('light')
+    toast.add({ title: dict('web-app.product.added'), icon: 'lucide:check', color: 'success', duration: 1500 })
+    selection.value = {}
+    quantity.value = 1
+  } else {
+    notify('error')
+    toast.add({ title: messageOf(orderStore.lastError), icon: 'lucide:circle-alert', color: 'error' })
+  }
+}
 </script>

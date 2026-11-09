@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col gap-2">
-    <h2 class="text-lg md:text-2xl font-semibold">
+    <h2 class="text-[19px] font-bold text-highlighted">
       {{ $dict('web-app.checkout.contacts') }}
     </h2>
 
@@ -21,7 +21,7 @@
           :ui="{
             trailingIcon: 'text-secondary',
           }"
-          :placeholder="$dict('common.required')"
+          :placeholder="$dict('web-app.checkout.phone-placeholder')"
           class="w-full"
           @change="handlePhoneChange()"
           @blur="handlePhoneChange()"
@@ -39,7 +39,7 @@
         <UInput
           v-model="state.name"
           size="xl"
-          :placeholder="$dict('common.required')"
+          :placeholder="$dict('web-app.checkout.name-placeholder')"
           class="w-full"
         />
       </UFormField>

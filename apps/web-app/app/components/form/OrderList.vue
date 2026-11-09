@@ -1,13 +1,17 @@
 <template>
-  <h2 class="text-lg md:text-2xl font-semibold">
+  <h2 class="text-[19px] font-bold text-highlighted">
     {{ $dict('web-app.checkout.order-title') }}
   </h2>
 
-  <CheckoutLine
-    v-for="line in orderStore?.items"
-    :key="line.id"
-    :line="line"
-  />
+  <ul class="flex flex-col divide-y divide-default">
+    <li
+      v-for="line in orderStore?.items"
+      :key="line.id"
+      class="py-3"
+    >
+      <CartLine :line="line" />
+    </li>
+  </ul>
 
   <UFormField :label="$dict('web-app.checkout.order-note')">
     <UTextarea

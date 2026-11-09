@@ -1,0 +1,78 @@
+/*
+ * Storefront design tokens (docs/design/storefront-redesign.md §3). Default accent #D2381F: 4.85:1 with white.
+ * Scoped to the storefront app: the admin panel shares packages/ui and is not affected.
+ * `html:root` outranks the layer defaults regardless of stylesheet order.
+ */
+html:root {
+  --font-sans: 'Onest', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Tenant accent; replaced at runtime from branding.accent_color (useBranding). */
+  --brand-accent: #D2381F;
+  --brand-on-accent: #FFFFFF;
+
+  --ui-primary: var(--brand-accent);
+  --ui-secondary: var(--brand-accent);
+  --ui-radius: 0.75rem;
+
+  /* Warm neutral scale */
+  --ui-bg: #FFFFFF;
+  --ui-bg-muted: #FAFAF7;
+  --ui-bg-elevated: #F4F3EF;
+  --ui-bg-accented: #ECEAE4;
+  --ui-border: #ECEAE4;
+  --ui-border-muted: #F2F1EC;
+  --ui-border-accented: #DDDAD2;
+  --ui-text: #1C1B19;
+  --ui-text-highlighted: #1C1B19;
+  --ui-text-toned: #3A3834;
+  --ui-text-muted: #6B6862;
+  --ui-text-dimmed: #9A968E;
+
+  --shadow-float: 0 6px 24px -8px rgb(28 27 25 / 0.18), 0 2px 6px -2px rgb(28 27 25 / 0.08);
+  --header-h: 3.5rem;
+}
+
+html.dark:root {
+  --ui-bg: #161513;
+  --ui-bg-muted: #1C1B19;
+  --ui-bg-elevated: #24221F;
+  --ui-bg-accented: #2E2C28;
+  --ui-border: #2E2C28;
+  --ui-border-muted: #262421;
+  --ui-border-accented: #3A3834;
+  --ui-text: #F4F3EF;
+  --ui-text-highlighted: #FFFFFF;
+  --ui-text-toned: #DDDAD2;
+  --ui-text-muted: #A8A49B;
+  --ui-text-dimmed: #77736B;
+}
+
+html, body {
+  background: var(--ui-bg-muted);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
+}
+
+h1, h2, h3, h4, h5, h6, .font-serif {
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Primary action in the tenant colour with computed readable text */
+.btn-accent {
+  background: var(--brand-accent);
+  color: var(--brand-on-accent);
+}
+.btn-accent:hover:not(:disabled) { filter: brightness(0.96); }
+.btn-accent:disabled { opacity: 0.45; }
+
+.shadow-float { box-shadow: var(--shadow-float); }
+
+/* Hide scrollbars on horizontal chip rails while keeping them scrollable */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }

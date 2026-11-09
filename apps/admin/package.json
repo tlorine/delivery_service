@@ -1,0 +1,23 @@
+{
+  "name": "@delivery/admin",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cafe admin panel: orders, menu, stop-list, schedule, delivery, settings (SPA)",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3503",
+    "preview": "PORT=3503 nuxt preview",
+    "clean:modules": "rm -rf .nuxt node_modules",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@delivery/api-client": "workspace:*",
+    "@nextorders/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:types",
+    "nuxt": "catalog:dev"
+  }
+}

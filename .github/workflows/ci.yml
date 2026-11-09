@@ -21,9 +21,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
+    services:
+      # E2E runs the storefront against the real backend and PostgreSQL.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: delivery
+          POSTGRES_PASSWORD: delivery
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U delivery" --health-interval 5s --health-retries 10
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
 
     steps:
       - name: Checkout
@@ -41,10 +54,15 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
         run: pnpm --filter @nextorders/food-schema run build
+
+      - name: TS API types match backend/openapi.json
+        run: |
+          pnpm dlx openapi-typescript@7.13.0 backend/openapi.json --default-non-nullable false -o /tmp/schema.d.ts
+          cmp /tmp/schema.d.ts packages/api-client/src/schema.d.ts || (echo "run: pnpm --dir packages/api-client gen" && exit 1)
 
       - name: ESLint
         run: pnpm run lint
@@ -55,11 +73,27 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Build
+        run: pnpm run build
+
+      - name: Mobile SPA build (what the Capacitor shell loads)
+        run: NUXT_PUBLIC_API_BASE_URL=http://api.localhost:8078 pnpm --filter @nextorders/web-app run generate:mobile
+
+      - name: Backend for E2E
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Application DB role (no BYPASSRLS)
+        env:
+          PGPASSWORD: delivery
+        run: |
+          psql -h localhost -U delivery -d postgres -c "CREATE ROLE delivery_app LOGIN PASSWORD 'delivery_app' NOBYPASSRLS"
+          cd backend && uv sync --frozen
+
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps chromium
 
       - name: E2E tests
         run: pnpm run test:e2e
-
-      - name: Build
-        run: pnpm run build

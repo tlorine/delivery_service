@@ -44,7 +44,14 @@ const selectedTab = ref<DeliveryMethod | undefined>(orderStore.deliveryMethod)
 
 const isShown = computed(() => channelStore.deliveryByCourier?.isAvailable && channelStore.selfPickup?.isAvailable)
 
-watch (selectedTab, () => {
+watch(() => orderStore.deliveryMethod, (value) => {
+  selectedTab.value = value
+})
+
+watch(selectedTab, () => {
+  if (selectedTab.value === orderStore.deliveryMethod) {
+    return
+  }
   orderStore.change({
     deliveryMethod: selectedTab.value,
     paymentMethodId: '',

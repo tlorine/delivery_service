@@ -1,51 +1,60 @@
 <template>
-  <header class="z-40 h-16 sticky flex items-center justify-between border-b border-default bg-default px-4 sm:px-6 gap-1.5">
-    <div class="flex items-center gap-1.5 min-w-0">
-      <UButton
-        icon="lucide:menu"
-        color="neutral"
-        variant="outline"
-        size="lg"
-        class="visible lg:hidden"
-        @click="isNavbarOpened = true"
-      />
+  <header class="sticky top-0 z-40 border-b border-default bg-default/90 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-default/75">
+    <div class="mx-auto flex h-[var(--header-h)] w-full max-w-7xl items-center gap-3 px-4 md:px-6 lg:px-8">
+      <NuxtLink
+        to="/"
+        class="flex min-w-0 items-center gap-2.5"
+        :aria-label="$dict('common.home')"
+      >
+        <StoreLogo size="sm" />
+        <span class="truncate font-semibold text-[15px] md:text-base">{{ title }}</span>
+      </NuxtLink>
 
-      <div class="relative mr-auto group">
-        <UModal v-if="products.length" v-model:open="isModalOpened">
+      <div class="ml-auto flex items-center gap-2">
+        <UButton
+          v-if="isMobileApp"
+          to="/venues"
+          icon="lucide:store"
+          color="neutral"
+          variant="soft"
+          size="lg"
+          class="rounded-full"
+          :aria-label="$dict('web-app.venues.title')"
+          data-testid="my-venues-button"
+        />
+        <UModal v-if="products.length" v-model:open="isSearchOpened">
           <UButton
-            :label="$dict('web-app.search.placeholder')"
             icon="lucide:search"
             color="neutral"
-            variant="outline"
+            variant="soft"
             size="lg"
-            class="motion-preset-slide-down"
+            class="rounded-full"
+            :aria-label="$dict('web-app.search.placeholder')"
+            :ui="{ label: 'hidden md:inline' }"
+            :label="$dict('web-app.search.placeholder')"
           />
-
           <template #content>
             <UCommandPalette
               v-model="value"
               :groups="groups"
               :placeholder="$dict('web-app.search.placeholder')"
-              class="h-80"
+              class="h-96"
             />
           </template>
         </UModal>
       </div>
     </div>
-
-    <div class="flex items-center shrink-0 gap-3">
-      <CartButton />
-    </div>
   </header>
 </template>
 
 <script setup lang="ts">
-const { isNavbarOpened } = useApp()
-
 const optionsStore = useOptionsStore()
+const channelStore = useChannelStore()
 const menuStore = useMenuStore()
 
-const isModalOpened = ref(false)
+const title = computed(() => optionsStore.getLocaleValue(channelStore.title))
+const isSearchOpened = ref(false)
+const isMobileApp = usePlatform() === 'mobile'
 const products = computed(() => menuStore.getProductsForSearch())
 
 const groups = computed(() => [
@@ -55,7 +64,7 @@ const groups = computed(() => [
       label: optionsStore.getLocaleValue(product.title),
       suffix: optionsStore.getLocaleValue(product.category.title),
       onSelect: () => {
-        isModalOpened.value = false
+        isSearchOpened.value = false
         navigateTo(`/${product.category.slug}/${product.slug}`)
       },
     })),

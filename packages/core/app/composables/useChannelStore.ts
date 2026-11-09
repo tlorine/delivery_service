@@ -1,124 +1,76 @@
-import type { Channel, OpeningStatus, TimePeriod } from '@nextorders/food-schema'
+import type { Channel, OpeningStatus } from '@nextorders/food-schema'
 
+export interface TimeSlot {
+  /** ISO datetime sent to the API as requested_at */
+  value: string
+  /** Local time of the branch, HH:MM */
+  label: string
+}
+
+/**
+ * The cafe as the storefront components know it (food-schema `Channel`), adapted from /v1/storefront.
+ * One storefront = one tenant; branches appear as pickup points.
+ */
 export const useChannelStore = defineStore('channel', () => {
-  // All channels
-  const list = ref<Channel[]>([])
+  const storefront = useStorefrontStore()
 
-  // Active channel
-  const id = ref<Channel['id']>()
-  const isActive = ref<Channel['isActive']>(false)
-  const selectorTitle = ref<Channel['selectorTitle']>([])
-  const title = ref<Channel['title']>()
-  const description = ref<Channel['description']>()
-  const copyright = ref<Channel['copyright']>()
-  const deliveryByCourier = ref<Channel['deliveryByCourier']>()
-  const selfPickup = ref<Channel['selfPickup']>()
-  const links = ref<Channel['links']>()
+  const channel = computed<Channel | null>(() => storefront.data ? channelView(storefront.data) : null)
 
-  const deliveryOpeningStatus = ref<OpeningStatus>()
-  const selfPickupOpeningStatus = ref<OpeningStatus>()
+  const id = computed(() => channel.value?.id)
+  const isActive = computed(() => channel.value?.isActive ?? false)
+  const title = computed(() => channel.value?.title)
+  const description = computed(() => channel.value?.description)
+  const copyright = computed(() => channel.value?.copyright)
+  const deliveryByCourier = computed(() => channel.value?.deliveryByCourier)
+  const selfPickup = computed(() => channel.value?.selfPickup)
+  const links = computed<Channel['links']>(() => undefined)
+  const branches = computed(() => storefront.data?.branches ?? [])
 
-  const timeSlots = ref<TimePeriod[]>([])
+  const deliveryOpeningStatus = computed<OpeningStatus | undefined>(() => {
+    const sf = storefront.data
+    const branch = sf ? deliveryBranches(sf)[0] : undefined
+    return sf && branch ? openingStatusView(branch, sf.server_time) : undefined
+  })
+  const selfPickupOpeningStatus = computed<OpeningStatus | undefined>(() => {
+    const sf = storefront.data
+    const branch = sf ? pickupBranches(sf)[0] : undefined
+    return sf && branch ? openingStatusView(branch, sf.server_time) : undefined
+  })
 
-  const isOnMaintenance = computed(() => isActive.value === false)
+  const timeSlots = ref<TimeSlot[]>([])
+  const isOnMaintenance = computed(() => storefront.data !== null && !isActive.value)
 
-  async function updateList() {
-    try {
-      const data = await $fetch('/api/channel/list')
-      if (!data) {
-        return
-      }
-
-      list.value = data
-    } catch {
-      // API unavailable, keep default state
-    }
+  /** Refreshes opening status (server time) for all consumers. */
+  async function update() {
+    await storefront.update()
   }
 
-  function update() {
-    const { public: publicEnv } = useRuntimeConfig()
-    if (!publicEnv?.channelId) {
+  async function updateTimeSlots(branchId: string | undefined, fulfillment: 'delivery' | 'pickup') {
+    const branch = branches.value.find((b) => b.id === branchId) ?? branches.value[0]
+    if (!branch) {
+      timeSlots.value = []
       return
     }
-
-    const channel = list.value.find((channel) => channel.id === publicEnv.channelId)
-    if (!channel) {
-      return
-    }
-
-    isActive.value = channel.isActive
-    selectorTitle.value = channel.selectorTitle
-    title.value = channel.title
-    description.value = channel.description
-    copyright.value = channel.copyright
-    deliveryByCourier.value = channel.deliveryByCourier
-    selfPickup.value = channel.selfPickup
-    links.value = channel.links
-  }
-
-  function select(id: string): void {
-    const channel = list.value.find((channel) => channel.id === id)
-    if (!channel) {
-      return
-    }
-
-    // Save result to local storage
-    localStorage.setItem('selector-channel-id', id)
-    // Redirect to url
-    window.location.href = channel.url
-  }
-
-  async function updateDeliveryOpeningStatus() {
     try {
-      const data = await $fetch(`/api/channel/delivery-status`)
-      if (!data) {
-        return
-      }
-
-      deliveryOpeningStatus.value = data
+      const slots = await useNuxtApp().$api.get('/v1/storefront/time-slots', {
+        query: { branch_id: branch.id, fulfillment },
+      })
+      timeSlots.value = slots.map((value) => ({ value, label: localParts(value, branch.timezone).time }))
     } catch {
-      // API unavailable, keep default state
-    }
-  }
-
-  async function updateSelfPickupOpeningStatus() {
-    try {
-      const data = await $fetch(`/api/channel/self-pickup-status`)
-      if (!data) {
-        return
-      }
-
-      selfPickupOpeningStatus.value = data
-    } catch {
-      // API unavailable, keep default state
-    }
-  }
-
-  async function updateTimeSlots() {
-    try {
-      const data = await $fetch(`/api/channel/time-slots`)
-      if (!data) {
-        return
-      }
-
-      timeSlots.value = data
-    } catch {
-      // API unavailable, keep default state
+      timeSlots.value = []
     }
   }
 
   return {
-    list,
-
     id,
     isActive,
-    selectorTitle,
     title,
     description,
     copyright,
     deliveryByCourier,
     selfPickup,
     links,
+    branches,
 
     deliveryOpeningStatus,
     selfPickupOpeningStatus,
@@ -127,10 +79,6 @@ export const useChannelStore = defineStore('channel', () => {
     isOnMaintenance,
 
     update,
-    updateList,
-    updateDeliveryOpeningStatus,
-    updateSelfPickupOpeningStatus,
     updateTimeSlots,
-    select,
   }
 })

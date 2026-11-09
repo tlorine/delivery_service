@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col gap-2">
-    <h2 class="text-lg md:text-2xl font-semibold">
+    <h2 class="text-[19px] font-bold text-highlighted">
       {{ $dict('web-app.checkout.pickup-address') }}
     </h2>
 

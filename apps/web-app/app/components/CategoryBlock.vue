@@ -1,29 +1,12 @@
 <template>
-  <div class="mb-4 flex flex-row justify-between items-center gap-2">
-    <h2 class="text-2xl/6 md:text-3xl font-semibold">
-      {{ optionsStore.getLocaleValue(category?.title) }}
+  <section :id="category.slug" class="scroll-mt-32 pt-6 first:pt-2">
+    <h2 class="mb-3 text-[22px]/7 md:text-[26px]/8 font-bold text-highlighted">
+      <NuxtLink :to="`/${category.slug}`" class="hover:underline underline-offset-4 decoration-2">
+        {{ optionsStore.getLocaleValue(category.title) }}
+      </NuxtLink>
     </h2>
-
-    <UButton
-      :to="`/${category?.slug}`"
-      size="lg"
-      variant="soft"
-      color="neutral"
-      trailing-icon="lucide:arrow-right"
-      :label="$dict('web-app.open-category')"
-    />
-  </div>
-
-  <div
-    class="mb-12 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6"
-  >
-    <ProductCard
-      v-for="product in products"
-      :key="product.id"
-      :product="product"
-      :lazy="!isFirst"
-    />
-  </div>
+    <ProductGrid :products="products" :lazy="!isFirst" />
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -35,6 +18,5 @@ const { category } = defineProps<{
 }>()
 
 const optionsStore = useOptionsStore()
-
-const products = computed(() => category?.products.filter((p) => p.isAvailableForPurchase && p.variants?.length).slice(0, 12))
+const products = computed(() => category.products.filter((p) => p.isAvailableForPurchase && p.variants?.length))
 </script>

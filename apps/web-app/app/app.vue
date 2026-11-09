@@ -15,36 +15,36 @@ const { locale } = useI18n()
 const lang = computed(() => locales[locale.value].code)
 const dir = computed(() => locales[locale.value].dir)
 
-// Init Stores
+const brand = useBranding()
+
+// Init Stores: storefront first (tenant locale), then menu.
+const storefrontStore = useStorefrontStore()
 const optionsStore = useOptionsStore()
 const orderStore = useOrderStore()
 const channelStore = useChannelStore()
 const menuStore = useMenuStore()
 
-await Promise.all([
-  optionsStore.update(),
-  channelStore.updateList(),
-  channelStore.updateDeliveryOpeningStatus(),
-  channelStore.updateSelfPickupOpeningStatus(),
-  channelStore.updateTimeSlots(),
-  menuStore.update(),
-])
+// Mobile app without a chosen cafe shows "Мои заведения" (middleware): nothing to load yet.
+const hasTenant = usePlatform() !== 'mobile' || !!useVenues().current.value
+if (hasTenant) {
+  await storefrontStore.update()
+  await menuStore.update()
+}
 
-channelStore.update()
-
-let interval: NodeJS.Timeout
+let interval: ReturnType<typeof setInterval>
 
 onMounted(() => {
-  // Only on client
+  // Only on client: the cart token and saved contacts live on the device.
+  if (!hasTenant) {
+    return
+  }
+  orderStore.restoreContacts()
   orderStore.update()
 
+  // Opening status and stop-list change during the day.
   interval = setInterval(() => {
-    Promise.all([
-      channelStore.updateDeliveryOpeningStatus(),
-      channelStore.updateSelfPickupOpeningStatus(),
-      channelStore.updateTimeSlots(),
-    ]).catch(() => {})
-  }, 30_000)
+    Promise.all([channelStore.update(), menuStore.update()]).catch(() => {})
+  }, 60_000)
 })
 
 onBeforeUnmount(() => {
@@ -55,6 +55,8 @@ useHead({
   htmlAttrs: {
     lang,
     dir,
+    // Tenant accent from data, already validated and contrast-checked (utils/brandColor.ts).
+    style: computed(() => `--brand-accent:${brand.tokens.value.accent};--brand-on-accent:${brand.tokens.value.onAccent}`),
   },
   link: optionsStore.headLinks,
   style: optionsStore.headStyles,

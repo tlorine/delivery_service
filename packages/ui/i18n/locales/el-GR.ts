@@ -1,4 +1,5 @@
-export const el: Dictionary = {
+// Upstream translation; keys added for the platform fall back to English (fallbackLocale).
+export const el: PartialDictionary = {
   'web-app': {
     'cart': {
       'title': 'Καλάθι',

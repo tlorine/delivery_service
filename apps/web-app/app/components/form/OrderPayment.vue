@@ -1,11 +1,12 @@
 <template>
   <div class="flex flex-col gap-2">
-    <h3 class="text-lg md:text-xl font-semibold">
+    <h3 class="text-[19px] font-bold text-highlighted">
       {{ $dict('web-app.checkout.payment-title') }}
     </h3>
 
     <USelect
       v-model="state.paymentMethodId"
+      :aria-label="$dict('web-app.checkout.payment-title')"
       :items="items"
       :ui="{
         leadingIcon: !!state.paymentMethodId && 'text-secondary',

@@ -3,19 +3,22 @@ import type { LocaleValue, Options } from '@nextorders/food-schema'
 const DIGIT_OR_SPACE_RE = /\d|\s/g
 
 export const useOptionsStore = defineStore('options', () => {
-  const selectorTitleValues = ref<Options['selectorTitle']>([])
-  const selectorDescriptionValues = ref<Options['selectorDescription']>()
-  const logoUrl = ref<Options['logoUrl']>()
-  const headLinks = ref<Options['headLinks']>([])
-  const headScripts = ref<Options['headScripts']>([])
-  const headStyles = ref<Options['headStyles']>([])
-  const availableLocales = ref<Options['availableLocales']>([])
-  const currencyCode = ref<Options['currencyCode']>()
-  const countryCode = ref<Options['countryCode']>()
-  const defaultLocale = ref<Options['defaultLocale']>()
-  const addressSuggestEnabled = ref(false)
-  const deliveryZonesEnabled = ref(false)
-  const deliveryZoneNotFoundMessageValues = ref<Options['deliveryZoneNotFoundMessage']>()
+  const storefront = useStorefrontStore()
+  const options = computed(() => storefront.data ? optionsView(storefront.data) : null)
+
+  const selectorTitleValues = computed(() => options.value?.selectorTitle ?? [])
+  const selectorDescriptionValues = computed(() => options.value?.selectorDescription)
+  const logoUrl = computed(() => options.value?.logoUrl)
+  const headLinks = computed<Options['headLinks']>(() => [])
+  const headScripts = computed<Options['headScripts']>(() => [])
+  const headStyles = computed<Options['headStyles']>(() => [])
+  const availableLocales = computed(() => options.value?.availableLocales ?? [])
+  const currencyCode = computed(() => options.value?.currencyCode)
+  const countryCode = computed(() => options.value?.countryCode)
+  const defaultLocale = computed(() => options.value?.defaultLocale)
+  const addressSuggestEnabled = computed(() => options.value?.addressSuggestEnabled ?? false)
+  const deliveryZonesEnabled = computed(() => options.value?.deliveryZonesEnabled ?? false)
+  const deliveryZoneNotFoundMessageValues = computed(() => options.value?.deliveryZoneNotFoundMessage)
 
   const { locale, locales } = useI18n()
 
@@ -27,28 +30,7 @@ export const useOptionsStore = defineStore('options', () => {
   const deliveryZoneNotFoundMessage = computed(() => getLocaleValue(deliveryZoneNotFoundMessageValues.value))
 
   async function update() {
-    try {
-      const data = await $fetch('/api/options')
-      if (!data) {
-        return
-      }
-
-      selectorTitleValues.value = data.selectorTitle
-      selectorDescriptionValues.value = data.selectorDescription
-      logoUrl.value = data.logoUrl
-      headLinks.value = data.headLinks
-      headScripts.value = data.headScripts
-      headStyles.value = data.headStyles
-      availableLocales.value = data.availableLocales
-      currencyCode.value = data.currencyCode
-      countryCode.value = data.countryCode
-      defaultLocale.value = data.defaultLocale
-      addressSuggestEnabled.value = data.addressSuggestEnabled ?? false
-      deliveryZonesEnabled.value = data.deliveryZonesEnabled ?? false
-      deliveryZoneNotFoundMessageValues.value = data.deliveryZoneNotFoundMessage
-    } catch {
-      // API unavailable, keep default state
-    }
+    await storefront.update()
   }
 
   function getLocaleValue(values: LocaleValue[] | undefined): string {
@@ -68,9 +50,10 @@ export const useOptionsStore = defineStore('options', () => {
     }
   }
 
+  /** `amount` is a display value in major units (rubles), produced by the adapter. */
   function formatCurrency(amount: number): string {
     try {
-      return new Intl.NumberFormat(appLocale.value?.language).format(amount)
+      return new Intl.NumberFormat(appLocale.value?.language, { maximumFractionDigits: 2 }).format(amount)
     } catch {
       return amount.toString()
     }
@@ -100,6 +83,8 @@ export const useOptionsStore = defineStore('options', () => {
     headStyles,
     availableLocales,
     countryCode,
+    currencyCode,
+    defaultLocale,
     addressSuggestEnabled,
     deliveryZonesEnabled,
 

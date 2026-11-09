@@ -1,67 +1,49 @@
 <template>
-  <div class="flex flex-col h-full shrink-0">
-    <template v-if="orderStore.id">
-      <div class="flex flex-col h-full shrink-0 md:motion-preset-slide-left">
-        <div class="flex flex-col gap-4 flex-1 overflow-y-auto px-4 py-2">
-          <div class="flex flex-row justify-between items-center">
-            <h3 class="text-2xl font-semibold">
-              {{ $dict('web-app.cart.title') }}
-            </h3>
+  <div class="flex flex-col" data-testid="cart">
+    <div class="flex items-center justify-between px-4 pt-2 pb-1">
+      <h2 class="text-[22px] font-bold text-highlighted">
+        {{ $dict('web-app.cart.title') }}
+      </h2>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 text-sm text-muted hover:text-toned"
+        @click="modalDeliveryInfo.open()"
+      >
+        <UIcon name="lucide:info" class="size-4" />{{ $dict('web-app.cart.conditions') }}
+      </button>
+    </div>
 
-            <UButton
-              icon="lucide:x"
-              variant="soft"
-              class="xl:hidden"
-              @click="isCartDrawerOpened = !isCartDrawerOpened"
-            />
-          </div>
-
-          <CartDeliveryMethodSwitch />
-
-          <div>
-            <CartEmpty v-if="orderStore.isEmpty" />
-            <template v-else>
-              <CartLine
-                v-for="item in orderStore.items"
-                :key="item.id"
-                :line="item"
-              />
-            </template>
-          </div>
-        </div>
-
-        <div class="shrink-0 flex flex-col gap-2 px-4 py-3.5 rounded-lg xl:bg-elevated/50">
-          <UButton
-            variant="link"
-            color="neutral"
-            icon="lucide:info"
-            class="px-0"
-            :label="$dict('web-app.cart.conditions')"
-            @click="modalDeliveryInfo.open()"
-          />
-
-          <UButton
-            v-if="!orderStore.isEmpty"
-            to="/checkout"
-            variant="solid"
-            color="secondary"
-            size="xl"
-            block
-            class="min-h-14 items-center justify-between motion-preset-slide-up-sm"
-          >
-            <p class="text-base/5 font-medium">
-              {{ $dict('web-app.cart.next-label') }}
-            </p>
-            <p class="shrink-0 text-center text-lg/4">
-              {{ optionsStore.formatCurrency(orderStore.totalPrice) }} <span class="text-base">{{ optionsStore.currencySign }}</span>
-            </p>
-          </UButton>
-        </div>
-      </div>
-    </template>
+    <CartEmpty v-if="orderStore.isEmpty" />
 
     <template v-else>
-      <UIcon name="i-lucide-shopping-basket" class="my-auto size-24 text-dimmed/25 self-center motion-preset-pop" />
+      <ul class="flex flex-col divide-y divide-default px-4 xl:max-h-[calc(100dvh-var(--header-h)-16rem)] xl:overflow-y-auto">
+        <li
+          v-for="item in orderStore.items"
+          :key="item.id"
+          class="py-3"
+        >
+          <CartLine :line="item" />
+        </li>
+      </ul>
+
+      <div class="mx-4 mt-1 flex items-center justify-between border-t border-default pt-3 text-[15px]">
+        <span class="text-muted">{{ $dict('web-app.checkout.cost.products') }}</span>
+        <span class="tabular font-semibold">{{ optionsStore.formatCurrency(orderStore.totalPrice) }} {{ optionsStore.currencySign }}</span>
+      </div>
+      <p v-if="orderStore.fulfillment === 'delivery'" class="mx-4 mt-1 text-xs text-muted">
+        {{ $dict('web-app.checkout.info-shipping-price') }}
+      </p>
+
+      <div class="p-4 pt-3">
+        <NuxtLink
+          to="/checkout"
+          class="btn-accent flex h-14 w-full items-center justify-between rounded-[16px] px-5 text-[16px] font-semibold transition active:scale-[.99]"
+          data-testid="to-checkout"
+        >
+          <span>{{ $dict('web-app.cart.to-checkout') }}</span>
+          <span class="tabular">{{ optionsStore.formatCurrency(orderStore.totalPrice) }} {{ optionsStore.currencySign }}</span>
+        </NuxtLink>
+      </div>
     </template>
   </div>
 </template>
@@ -69,11 +51,8 @@
 <script setup lang="ts">
 import { ModalDeliveryInfo } from '#components'
 
-const { isCartDrawerOpened } = useApp()
-
 const overlay = useOverlay()
 const modalDeliveryInfo = overlay.create(ModalDeliveryInfo)
-
 const optionsStore = useOptionsStore()
 const orderStore = useOrderStore()
 </script>

@@ -1,3 +1,4 @@
+import type { ModifierGroup } from '@delivery/api-client'
 import type { MenuCategory, Product, ProductVariant } from '@nextorders/food-schema'
 
 interface ProductWithCategory extends Product {
@@ -8,20 +9,25 @@ export const useMenuStore = defineStore('menu', () => {
   const categories = ref<MenuCategory[]>([])
   const products = ref<Product[]>([])
   const productVariants = ref<ProductVariant[]>([])
+  const modifierGroups = ref<Record<string, ModifierGroup[]>>({})
 
-  async function update() {
+  /** Menu with availability at `branchId` (stop-list); without it - catalog availability only. */
+  async function update(branchId?: string) {
+    const { $api } = useNuxtApp()
+    const locale = useStorefrontStore().data?.locale ?? 'ru'
     try {
-      const data = await $fetch('/api/menu')
-      if (!data) {
-        return
-      }
-
-      categories.value = data.categories
-      products.value = data.categories.flatMap((category) => category.products)
-      productVariants.value = data.categories.flatMap((category) => category.products.flatMap((product) => product.variants))
+      const menu = await $api.get('/v1/storefront/menu', { query: { branch_id: branchId } })
+      categories.value = menuView(menu, locale)
+      products.value = categories.value.flatMap((category) => category.products)
+      productVariants.value = products.value.flatMap((product) => product.variants)
+      modifierGroups.value = modifierGroupsByProduct(menu)
     } catch {
-      // API unavailable, keep default state
+      // Keep the last loaded menu; the cart re-validates availability on the server anyway.
     }
+  }
+
+  function getModifierGroups(productId: string): ModifierGroup[] {
+    return modifierGroups.value[productId] ?? []
   }
 
   function getProduct(id: string): Product | undefined {
@@ -87,6 +93,7 @@ export const useMenuStore = defineStore('menu', () => {
     products,
 
     update,
+    getModifierGroups,
     getProduct,
     getProductVariant,
     getProductBySlug,

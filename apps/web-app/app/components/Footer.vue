@@ -1,62 +1,56 @@
 <template>
-  <div class="px-4 lg:px-6 xl:px-8 my-20 flex flex-col gap-3.5">
-    <UNavigationMenu
-      variant="link"
-      orientation="vertical"
-      :items="footerMenuItems"
-      class="w-full -ml-2.5"
-    />
-
-    <div class="flex flex-col lg:flex-row gap-2 justify-between lg:items-start">
-      <div v-if="channelStore.copyright" class="font-sans text-xs text-muted whitespace-pre-wrap">
-        {{ optionsStore.getLocaleValue(channelStore.copyright) }}
+  <footer class="mt-8 border-t border-default bg-default">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-8 pb-32 md:px-6 lg:px-8 xl:pb-10">
+      <div class="flex flex-col gap-1">
+        <p class="font-semibold">
+          {{ optionsStore.getLocaleValue(channelStore.title) }}
+        </p>
+        <p
+          v-for="b in channelStore.branches"
+          :key="b.id"
+          class="text-sm text-muted"
+        >
+          {{ b.address }}<template v-if="b.phone">
+            · <a :href="`tel:${b.phone}`" class="underline-offset-2 hover:underline">{{ b.phone }}</a>
+          </template>
+        </p>
       </div>
 
       <UNavigationMenu
-        :items="socialMenuItems"
-        :ui="{
-          linkLeadingIcon: 'size-8',
-        }"
-        orientation="horizontal"
+        v-if="footerMenuItems?.length"
         variant="link"
-        class="-mx-2.5"
+        orientation="vertical"
+        :items="footerMenuItems"
+        class="-ml-2.5 w-full"
       />
-    </div>
 
-    <div class="mt-4 flex flex-row gap-1.5 items-center text-sm text-muted">
-      {{ $dict('common.footer.copyright-part-one') }}
-      <UIcon name="i-lucide-heart" class="size-4" />
-      {{ $dict('common.footer.copyright-part-two') }}
-
-      <ULink
-        :to="appConfig.projectUrl"
-        target="_blank"
-        external
-        class="font-medium flex flex-row gap-1 items-center"
-      >
-        <UIcon name="simple-icons:github" class="size-4" />
-        {{ appConfig.projectTitle }}
-      </ULink>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p v-if="copyright" class="whitespace-pre-wrap text-xs text-muted">
+          {{ copyright }}
+        </p>
+        <div class="flex items-center gap-2">
+          <UColorModeButton variant="ghost" color="neutral" />
+          <LanguageSelect :available-locales="optionsStore.availableLocales" />
+        </div>
+      </div>
     </div>
-  </div>
+  </footer>
 </template>
 
 <script setup lang="ts">
-const appConfig = useAppConfig()
 const optionsStore = useOptionsStore()
 const channelStore = useChannelStore()
+
+// Hide a copyright that only repeats the cafe name shown above.
+const copyright = computed(() => {
+  const text = optionsStore.getLocaleValue(channelStore.copyright)
+  return text && text !== optionsStore.getLocaleValue(channelStore.title) ? text : ''
+})
 
 const footerMenuItems = computed(() => channelStore.links?.footer.map((link) => ({
   label: optionsStore.getLocaleValue(link.label),
   to: link.to,
   icon: link.icon,
   target: link.target,
-})))
-
-const socialMenuItems = computed(() => channelStore.links?.social.map((link) => ({
-  to: link.to,
-  icon: link.icon,
-  target: link.target,
-  size: 'xl',
 })))
 </script>

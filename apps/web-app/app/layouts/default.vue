@@ -1,48 +1,32 @@
 <template>
+  <!-- The document scrolls (no inner scroll container): native address-bar collapse, tap-to-top, Telegram gestures. -->
   <Header />
 
-  <div class="fixed inset-0 flex overflow-hidden">
-    <div class="hidden lg:flex flex-col min-w-16 w-72 mt-16 px-4 py-2 border-r border-default shrink-0 bg-elevated/25">
-      <Navigation />
-    </div>
-
-    <main :ref="mainContentRefTitle" class="flex flex-col min-w-0 min-h-svh flex-1 pt-16 xl:pr-80 overflow-auto">
-      <UContainer class="mx-0 pb-10 pt-4 max-w-7xl">
-        <slot />
-      </UContainer>
-
-      <Footer />
+  <div class="mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
+    <main class="min-w-0 pt-3 md:pt-5 pb-28 xl:pb-12">
+      <slot />
     </main>
+
+    <!-- Mounted only on wide screens: one cart in the DOM / accessibility tree per layout. -->
+    <aside
+      v-if="isWide"
+      class="hidden xl:block pt-5"
+      :aria-label="$dict('web-app.cart.title')"
+    >
+      <div class="sticky top-[calc(var(--header-h)+1.25rem)]">
+        <div class="rounded-[24px] bg-default ring-1 ring-default py-2">
+          <Cart />
+        </div>
+      </div>
+    </aside>
   </div>
 
-  <aside class="z-50 hidden w-0 xl:block fixed xl:w-74 right-6 top-4 bottom-4">
-    <div class="pt-2 rounded-lg bg-default border border-default h-full max-h-240">
-      <Cart />
-    </div>
-  </aside>
-
-  <USlideover
-    v-model:open="isNavbarOpened"
-    side="left"
-  >
-    <template #header>
-      <div class="flex flex-row items-center">
-        <UButton
-          icon="i-lucide-x"
-          color="neutral"
-          variant="outline"
-          @click="isNavbarOpened = false"
-        />
-      </div>
-    </template>
-
-    <template #body>
-      <Navigation />
-    </template>
-  </USlideover>
+  <Footer />
+  <CartBar />
 </template>
 
 <script setup lang="ts">
-const { isNavbarOpened } = useApp()
-const { mainContentRefTitle } = useScroll()
+import { useMediaQuery } from '@vueuse/core'
+
+const isWide = useMediaQuery('(min-width: 1280px)')
 </script>

@@ -1,0 +1,19 @@
+{
+  "name": "@delivery/api-client",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed client for the platform API, generated from backend/openapi.json (single source of truth, ADR-0003)",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "gen": "pnpm dlx openapi-typescript@7.13.0 ../../backend/openapi.json --default-non-nullable false -o src/schema.d.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:dev"
+  }
+}

@@ -8,6 +8,10 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@capacitor/app": "catalog:mobile",
+    "@capacitor/core": "catalog:mobile",
+    "@capacitor/preferences": "catalog:mobile",
+    "@delivery/api-client": "workspace:*",
     "@nextorders/food-schema": "workspace:*",
     "@paralleldrive/cuid2": "catalog:integrations",
     "@pinia/nuxt": "catalog:integrations",

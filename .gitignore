@@ -63,3 +63,9 @@ vite.config.*.timestamp-*
 
 ### Types ###
 /typings/
+# Mobile SPA build (apps/web-app, NUXT_BUILD_TARGET=mobile)
+.nuxt-mobile
+.output-mobile
+
+# nuxt generate symlink to the mobile build
+apps/web-app/dist

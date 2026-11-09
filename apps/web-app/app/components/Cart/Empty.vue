@@ -1,11 +1,10 @@
 <template>
-  <div class="mt-8 md:mt-12 flex flex-col gap-2 items-center justify-center">
-    <UIcon
-      name="i-lucide-shopping-basket"
-      class="mx-auto size-24 text-dimmed/25 motion-preset-pop"
-    />
-    <p class="text-lg text-center font-normal italic text-dimmed">
+  <div class="px-4 py-8 text-center" data-testid="cart-empty">
+    <p class="font-medium text-toned">
       {{ $dict('web-app.cart.empty-label') }}
+    </p>
+    <p class="mt-1 text-sm text-muted">
+      {{ $dict('web-app.cart.empty-hint') }}
     </p>
   </div>
 </template>

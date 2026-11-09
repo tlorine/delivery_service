@@ -1,11 +1,12 @@
 <template>
   <div class="flex flex-col gap-2">
-    <h3 class="text-lg md:text-xl font-semibold">
+    <h3 class="text-[19px] font-bold text-highlighted">
       {{ $dict('web-app.checkout.time-title') }}
     </h3>
 
     <USelect
       v-model="selectedTimeSlotValue"
+      :aria-label="$dict('web-app.checkout.time-title')"
       :items="items"
       :ui="{
         leadingIcon: state.readyBy !== '0' && 'text-secondary',
@@ -31,12 +32,7 @@ const defaultTimeSlot = '0'
 const items = computed(() =>
   [
     { label: dict('web-app.checkout.as-soon-as-possible'), value: defaultTimeSlot },
-    ...channelStore.timeSlots.map((slot) => (
-      {
-        label: `${slot.start} - ${slot.end}`,
-        value: `${slot.start} - ${slot.end}`,
-      }
-    )),
+    ...channelStore.timeSlots.map((slot) => ({ label: slot.label, value: slot.value })),
   ],
 )
 
@@ -58,6 +54,12 @@ watch(state, () => {
 
   orderStore.isSaved = false
 }, { deep: true })
+
+// Slots depend on the branch and on delivery vs pickup (lead time differs).
+watch(() => [orderStore.fulfillment, orderStore.quote?.branch_id, orderStore.address], () => {
+  const branchId = orderStore.address?.type === 'warehouseAddress' ? orderStore.address.id : orderStore.quote?.branch_id
+  channelStore.updateTimeSlots(branchId ?? undefined, orderStore.fulfillment ?? 'pickup')
+}, { immediate: true, deep: true })
 
 watch(items, () => {
   // If there is no selected time slot, select the default

@@ -1,4 +1,5 @@
-export const zh_cn: Dictionary = {
+// Upstream translation; keys added for the platform fall back to English (fallbackLocale).
+export const zh_cn: PartialDictionary = {
   'web-app': {
     'cart': {
       'title': '购物车',
