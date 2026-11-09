@@ -13,6 +13,15 @@
 
 Маршрутизация: `*.<platform-domain>` и собственные домены → прокси → `/v1/*` на api (тот же origin — без CORS и с корректным Host для определения тенанта), остальное → web. Админка — `admin.<platform-domain>`.
 
+## Образы и CI
+| Workflow | Когда | Что |
+|---|---|---|
+| `ci.yml` | push в `main`, PR в `main` | lint, typecheck, unit, сборка, E2E (витрина, админка, мобильная SPA-сборка) против backend + PostgreSQL 17 |
+| `backend.yml` | push/PR с изменениями `backend/**` | ruff, mypy, актуальность OpenAPI, миграции без дрейфа, pytest, сборка образа |
+| `images.yml` | push в `main` (код/Dockerfile) или вручную | образы `ghcr.io/<repo>/backend`, `…/web-app`, `…/admin` с тегами `main` и SHA коммита |
+
+Dockerfile: `backend/Dockerfile`, `docker/web-app/Dockerfile`, `docker/admin/Dockerfile` (контекст — весь workspace, установка `--frozen-lockfile` с фильтром приложения; `.dockerignore` исключает backend, документацию, нативные проекты). Workflow-ы NextOrders (публикация `@nextorders/food-schema` в npm, деплой их демо в Kubernetes, образы essence/selector) удалены.
+
 ## Окружения и секреты
 Backend: `TRUST_FORWARDED_HOST=true` за прокси/витриной (тенант по `X-Forwarded-Host`), `GEOCODER=dadata` + `DADATA_API_KEY` для доставки. Мобильное приложение: хост API в `PLATFORM_API_HOSTS`, `CORS_ORIGINS` = `["https://localhost","capacitor://localhost"]` (mobile.md). Витрина: `NUXT_API_INTERNAL_URL` (адрес API для SSR), `NUXT_PROXY_API=false`, если `/v1` маршрутизирует reverse proxy.
 
